@@ -1,0 +1,154 @@
+# llm-switch sample configuration
+# Default location: ~/.llm-switch/config.yaml
+#
+# Every key below is optional; the commented value is the default.
+
+server:
+  host: 127.0.0.1
+  port: 8787
+  # Access token every HTTP caller must present. Enforced by the gateway on
+  # every route except `GET /health` (and CORS preflight) via:
+  #   Authorization: Bearer <token>   — OpenAI / Anthropic / Codex / OpenCode
+  #   x-api-key: <token>              — Anthropic SDK
+  #   x-goog-api-key: <token>         — Gemini-family clients
+  #   ?access_token=<token>           — /console/* only (the embedded web UI
+  #                                     iframe cannot send request headers)
+  # Leave unset for an open loopback proxy — but then `host` MUST stay on a
+  # loopback address, otherwise startup is refused (see docs/FAQ.md).
+  # Enabling the token after taking clients over: re-run takeover once so the
+  # clients present the new value.
+  # access_token: "change-me"
+  cors_allow_origins: []
+  # Inbound request-body ceiling in MiB. Requests larger than this are rejected
+  # by the proxy itself (before reaching any backend) with a 413 that names this
+  # key. Keep it above what your clients actually send — Claude Code reports any
+  # 413 as "Request too large (max 32MB)", which is easy to misread as an
+  # upstream limit. 0 falls back to the default; hard-capped at 512.
+  max_body_mb: 64
+
+routing:
+  # weighted_round_robin | round_robin | least_busy | failover | cache_aware
+  policy: weighted_round_robin
+  retries: 1              # how many other backends to try after a failure
+  cooldown_secs: 30       # cooling-off for a backend that just failed
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 3        # consecutive failures before opening
+    success_threshold: 1        # half-open successes before closing
+    timeout_secs: 30            # open -> half-open probe delay
+    error_rate_threshold: 0.6   # secondary trigger (with min_requests)
+    min_requests: 10
+  affinity:               # keep one conversation on one backend so its KV stays warm
+    enabled: true
+    ttl_secs: 1800
+    min_prefix_chars: 2000
+
+timeouts:
+  connect_ms: 5000
+  first_byte_ms: 60000
+  idle_stream_ms: 120000
+  total_ms: 1800000
+
+# Global parameter defaults: bottom layer of the override stack
+# (global -> backend -> model -> client request). See DEVELOPMENT-PLAN §5.3.
+params:
+  temperature: 0.7
+  max_tokens: 8192
+
+cache:
+  response:
+    # Replaying stored replies is opt-in: it is wrong for most agentic traffic.
+    enabled: false
+    key_granularity: strict     # strict | loose (loose ignores sampling knobs)
+    default_ttl_secs: 3600
+    memory_mb: 256              # hot tier
+    disk_gb: 8                  # cold tier, user-set; 0 disables the disk tier
+    persist: true               # scan the disk tier at startup and reuse
+    replay: instant             # instant | paced
+    exclude_when_tools: true    # never cache requests carrying tool definitions
+    max_temperature: 0.0
+    per_model:
+      # qwen3-coder: { enabled: true, ttl_secs: 86400, key_granularity: loose }
+      {}
+  affinity:
+    enabled: true
+    ttl_secs: 1800
+    min_prefix_chars: 2000
+
+logs:
+  level: "info,llm_switch=info"
+  retention_days: 7
+  max_mb: 50
+  capture_bodies: false         # off by default; masked and size-capped when on
+  max_body_bytes: 8192
+
+# data_dir: ~/.llm-switch
+
+backends:
+  # Local MLX server with the tiered memory + SSD KV cache.
+  - name: studio-omlx
+    base_url: http://127.0.0.1:8000
+    engine: omlx
+    api_key: null
+    weight: 2
+    models:
+      - qwen3-30b-a3b
+      - gemma3-12b-vision
+    # capabilities: omit to inherit the engine preset; set to narrow or widen it
+    params:
+      temperature: 0.6
+
+  # A box running vLLM, weighted lower because it is shared.
+  - name: lab-vllm
+    base_url: http://10.0.4.12:30000
+    engine: vllm
+    weight: 1
+    models:
+      - deepseek-r1-distill
+    aliases:                       # public name -> upstream served name
+      deepseek-r1-distill: DeepSeek-R1-Distill-Qwen-14B
+    params:
+      repetition_penalty: 1.05
+
+  # Another machine speaking the Anthropic dialect upstream.
+  - name: relay-anthropic
+    base_url: https://api.anthropic.com
+    engine: custom
+    protocol: anthropic
+    api_key: "sk-ant-replace-me"   # ${ENV_VAR} expansion is not wired yet
+    weight: 1
+    models:
+      - claude-sonnet-4-5
+
+# ── 引擎控制台（SSH 控制面）────────────────────────────────────────
+# 后端 engine: halogen / gufo 时，控制台页右侧换成原生面板：状态/指标/中文日志/
+# 启停/参数/版本切换（一键更新+备份槽恢复）全部经 SSH 在目标机上执行。
+# 两节都可省略（用默认值）。halogen 与 gufo 部署在同一台 102（互斥占 8731，
+# 内存只够一家，启停脚本自带互斥守卫），仅部署目录不同。
+halctl:
+  hosts: ["10.0.0.102", "192.168.31.168"]  # 按序尝试：雷电直连优先、局域网兜底
+  user: lowkey                              # SSH 用户（需免密 BatchMode）
+  proj: /mnt/haloen                         # 部署目录（hal.sh / hal-ver.sh / hal_env.py / hal_log_cn.py / halogen.env）
+
+# gufo 机位（容器 gufo-runtime:latest，自带 ROCm 10.1；权重 /mnt/data/llm/qwen3.8-flash-next-ud）
+guctl:
+  hosts: ["10.0.0.102", "192.168.31.168"]
+  user: lowkey
+  proj: /mnt/data/gufo                      # 部署目录（gufo.sh / gu-ver.sh / gu_env.py / gu_log_cn.py / gufo.conf）
+
+# 双引擎的后端行样例（同 base_url :8731/v1、同模型 ID，同时只开一个）：
+#
+#   - name: lan-qwen
+#     base_url: http://192.168.31.168:8731/v1
+#     engine: halogen
+#     protocol: openai_chat
+#     models: [qwen3.8-flash-next]
+#
+#   - name: lan-qwen-gufo
+#     base_url: http://192.168.31.168:8731/v1
+#     engine: gufo
+#     protocol: openai_chat
+#     enabled: false                          # 上线时与 halogen 二选一 enabled: true
+#     models: [qwen3.8-flash-next]
+#     start_script: /Users/lowkey/myllm/gufo/llmsw-gufo-start.sh   # 控制台启用 SSH 派发
+#     stop_script: /Users/lowkey/myllm/gufo/llmsw-gufo-stop.sh

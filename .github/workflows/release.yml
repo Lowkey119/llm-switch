@@ -1,0 +1,86 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要发布的标签（如 v0.2.37）
+        required: true
+        default: v0.2.37
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            label: macOS (Apple Silicon)
+          - os: macos-13
+            label: macOS (Intel)
+          - os: windows-latest
+            label: Windows
+          - os: ubuntu-22.04
+            label: Linux
+
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Linux 依赖
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev \
+            libayatana-appindicator3-dev libxdo-dev patchelf libssl-dev build-essential
+
+      - name: 前端
+        run: |
+          npm --prefix ui ci --no-audit --no-fund
+          npm --prefix ui run build
+
+      # 从 src-tauri 里跑，绕开仓库内其它 package.json 干扰 CLI 的项目探测
+      - name: 构建安装包
+        working-directory: src-tauri
+        shell: bash
+        run: ../ui/node_modules/.bin/tauri build -c '{"bundle":{"targets":"all"}}'
+
+      - name: 收集产物
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          find src-tauri/target/release/bundle src-tauri/target/*/release/bundle -type f \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \
+               -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) \
+            -exec cp -r {} artifacts/ \; 2>/dev/null || true
+          ls -lh artifacts
+
+      - name: 校验和
+        shell: bash
+        run: |
+          cd artifacts
+          if [ "$(ls -A .)" ]; then
+            shasum -a 256 * > SHA256SUMS-${{ matrix.label }}.txt 2>/dev/null \
+              || for f in *; do certutil -hashfile "$f" SHA256 | sed -n 2p; echo "  $f"; done > SHA256SUMS-${{ matrix.label }}.txt
+          fi
+
+      - name: 上传到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: artifacts/*
+          fail_on_unmatched_files: false

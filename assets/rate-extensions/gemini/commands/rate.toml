@@ -1,0 +1,10 @@
+description = "打印 llm-switch 此刻算好的本代理速率（decode / prefill / ctx），与 llm-switch 浮窗同源。"
+prompt = """
+下面这段是 llm-switch 网关此刻为本代理算好的速率（口径：引擎原生速率优先，退回网关校准值）：
+
+!{python3 ~/.gemini/llm-switch-rate.py --app gemini}
+
+请把这一行原样转述给我，不要改写、换算或补充任何你自己估计的数字。
+如果上面是空的，说明此刻取不到 llm-switch 的速率（网关没起或发现文件缺失），
+直接如实说明即可，不要改用你自己的估算。
+"""

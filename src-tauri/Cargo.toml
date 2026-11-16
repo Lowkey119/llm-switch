@@ -1,0 +1,74 @@
+[package]
+name = "llm-switch"
+version = "0.2.37"
+edition = "2021"
+description = "Local multi-backend LLM gateway with protocol translation, metrics, caching and skills management"
+license = "MIT"
+repository = "https://gitee.com/lowkey/llm-switch"
+
+[lib]
+name = "llm_switch"
+path = "src/lib.rs"
+
+[[bin]]
+name = "llm-switch"
+path = "src/main.rs"
+
+[features]
+default = []
+# Desktop shell (Tauri 2). Kept off-by-default so headless deployments and CI
+# never pay the WebKit build cost; `cargo build --features gui` enables it.
+gui = [
+  "dep:tauri",
+  "dep:tauri-plugin-single-instance",
+  "dep:tauri-plugin-window-state",
+  "dep:tauri-build",
+]
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "fs", "time", "sync", "process"] }
+tower-http = { version = "0.5", features = ["cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+# 无损改写 Codex config.toml（保住用户注释）
+toml_edit = "0.22"
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
+bytes = "1"
+futures = "0.3"
+sha2 = "0.10"
+base64 = "0.22"
+zip = "2"
+tempfile = "3"
+http = "1"
+url = "2"
+async-stream = "0.3"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
+tauri = { version = "2", features = ["tray-icon"], optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
+tauri-plugin-window-state = { version = "2", optional = true }
+sysinfo = "0.40.1"
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+macmon = { version = "0.11.0", default-features = false }
+
+[build-dependencies]
+# `features = []` 由 tauri CLI 自动写入（它会确保 tauri-build 不吃默认 features），别手删。
+tauri-build = { version = "2", optional = true, features = [] }
+
+[dev-dependencies]
+async-stream = "0.3"
+bytes = "1"
+tempfile = "3"
+tower = { version = "0.4", features = ["util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

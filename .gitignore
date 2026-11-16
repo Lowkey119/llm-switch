@@ -1,0 +1,19 @@
+target/
+node_modules/
+dist/
+.refs/
+.DS_Store
+*.log
+src-tauri/gen/
+.omc/
+eval-results/
+docs/
+
+# 备份/私有库排除：可再生产物与涉密本地件
+dist-release/
+demo-video/clips/
+demo-video/prep/
+*.db
+*.db-wal
+*.db-shm
+*.bak
