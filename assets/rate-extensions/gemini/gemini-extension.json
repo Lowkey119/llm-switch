@@ -1,0 +1,6 @@
+{
+  "name": "llm-switch-rate",
+  "version": "1.0.0",
+  "displayName": "llm-switch 速率",
+  "description": "/rate 打印 llm-switch 网关为本代理算好的 decode / prefill 速率与上下文占用，数值与 llm-switch 浮窗同源。"
+}

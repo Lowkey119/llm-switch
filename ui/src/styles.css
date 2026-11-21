@@ -1,0 +1,696 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * 主题：全站颜色都走 Tailwind 的颜色变量（bg-slate-900 编译成 var(--color-slate-900)），
+ * 所以在这里按 data-theme 重定义这些变量，就能整站换肤，页面里一行 class 都不用改。
+ *
+ *   dark  = 深绿（墨绿底 + 薄荷字）
+ *   light = 暖白（护眼淡黄纸底 + 棕灰字，色阶方向是反的：950 最浅、100 最深）
+ * ------------------------------------------------------------------------- */
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* 开关与状态点的专用色：语义色，不参与 slate 那套冷暖翻转。
+     开=浅绿、关=亮红，深底上要够跳；浅底下也别糊成一片。 */
+  --sw-on: #3ddc84;
+  --sw-off: #ff4d4f;
+  --sw-live: #ffb020;
+
+  /* 品牌标虚线圈（用户 2026-11-20 拍板改明亮艳绿）：图形 ≥3:1。 */
+  --brand-ring: #00e676;
+
+  --color-slate-950: #06110d; /* 页面底 */
+  --color-slate-900: #0a1a14; /* 卡片 / 侧栏 */
+  --color-slate-800: #143026; /* 分隔线 */
+  --color-slate-700: #1f4436; /* 强边框 / hover */
+  --color-slate-600: #2f5b48;
+  --color-slate-500: #6f9c86; /* 次要文字 */
+  --color-slate-400: #93b8a5;
+  --color-slate-300: #bfd8cb;
+  --color-slate-200: #dcebe1; /* 正文 */
+  --color-slate-100: #eff7f2; /* 强调文字 */
+
+  /* 语义「字」色（UI-AUDIT P0-1）：灯色与字色必须分家。
+     --sw-* 是高饱和填充（灯/点/进度条），深底上好看的那几个值放到浅底上就没了；
+     文字与描边一律走 --sem-*-text，两套主题各自达标 4.5:1。 */
+  --sem-ok-text: #3ddc84;
+  --sem-danger-text: #ff8080;
+  --sem-busy-text: #ffc24d;
+
+  /* 符号专用鲜色（用户 2026-11-19）：◐▶ 这类相位符号是图形不是正文，
+     浅底上压深到字色档会发闷，各主题取「鲜亮且图形 3:1」档。 */
+  --sem-icon-ok: #3ddc84;
+  --sem-icon-prefill: #22d3ee;
+
+  /* 列表选中态（提示词面板等）：从前用 bg-slate-700/60，落在墨绿深底上几乎看不出来
+     （用户实测「深色主题下看不到高亮的选中」）。选中底与描边各给一档，两套主题分别达标。 */
+  --sel-bg: #1e4a3d;
+  --sel-ring: #3ddc84;
+
+  /* 空闲数据流点（UI-AUDIT-2 B-4）：以前直接拿 --color-slate-600 当「空闲」灰点，
+     浅色主题下它是暖棕，落在纸底上够不到图形 3:1。空闲点也是信息，单独给一档。 */
+  --dot-idle: var(--color-slate-500);
+
+  /* 键盘焦点环（P0-2）：双主题各自达标 3:1 */
+  --focus: #22d3ee;
+
+  /* 图表色（P1-5）：替代散在 SVG 里的硬编码 hex，浅色下另压深档 */
+  --chart-1: #22d3ee;
+  --chart-2: #a78bfa;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #f472b6;
+  --chart-6: #94a3b8;
+  /* 图表坐标轴（ui_01 回灌 U8）：两套主题原先都吃 slate-700，深绿卡底上只有
+     1.66:1——基线画了等于没画，柱子读不出从哪儿量起。轴线是信息，提到次要文字档
+     （5.79:1）；网格线留 slate-700 当装饰（信息全在刻度和读数行上，不靠网格读）。 */
+  --chart-axis: var(--color-slate-500);
+  --chart-grid: var(--color-slate-700);
+
+  /* 浮动窗玻璃壳（浮窗 / 速率线 / 资源小窗）：盖在桌面内容上，深色是默认气质，
+     但主题按钮切浅色时它们必须一起切——壳的颜色也只在这里定义一次。 */
+  --float-bg: rgba(9, 14, 13, 0.92);
+  --float-border: rgba(226, 232, 240, 0.38);
+  --float-shadow: 0 8px 26px rgba(0, 0, 0, 0.42);
+  --float-orb-bg: rgba(9, 14, 13, 0.78);
+  --float-orb-border: rgba(255, 255, 255, 0.85);
+  --float-orb-ink: #fff;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+
+  /* 灯色在浅纸地上同样要达标（图形 ≥3:1）：原 #8fe3a6 / #ff9f0a 只有
+     1.42 / 1.91，「健康」「在飞」这两盏主灯等于没亮。压深到既看得见、
+     又不至于发乌的那一档（同时保证 Toggle 深墨滑块在底上 ≥3:1）。 */
+  --sw-on: #2fa06a; /* 浅绿：3.06:1 */
+  --sw-off: #ff2d20; /* 亮红：3.45:1 */
+  --sw-live: #c96f0a; /* 琥珀：3.38:1 */
+
+  /* 品牌标虚线圈：浅纸地上的艳绿（压深一档保 ≥3:1）。 */
+  --brand-ring: #00a344;
+
+  --color-slate-950: #f5eed9; /* 纸底 */
+  --color-slate-900: #fbf6e9; /* 卡片 / 侧栏 */
+  --color-slate-800: #e4d8b6; /* 分隔线 */
+  --color-slate-700: #cdbc92; /* 强边框 / hover */
+  --color-slate-600: #a8946c;
+  --color-slate-500: #6f5f42; /* 次要文字（原 #857150 仅 4.35:1，压深后 5.74） */
+  --color-slate-400: #6b5a3e;
+  --color-slate-300: #52452e;
+  --color-slate-200: #3b3120; /* 正文 */
+  --color-slate-100: #2a2314; /* 强调文字 */
+
+  /* 语义色在浅底上要压深一档，否则淡黄纸上根本看不清 */
+  --color-cyan-200: #0c5f6b;
+  --color-cyan-300: #0b5a66;
+  --color-cyan-400: #0a515c;
+  --color-cyan-500: #0e4f59;
+  --color-cyan-600: #0a454e;
+  --color-emerald-300: #146b52;
+  --color-emerald-400: #12644c;
+  --color-emerald-500: #14604a;
+  --color-amber-300: #7a5a12;
+  --color-amber-400: #6f5210;
+  --color-amber-500: #6b4f0f;
+  --color-rose-200: #93334d;
+  --color-rose-300: #8a2f48;
+  --color-rose-500: #9b2f47;
+  --color-red-400: #b02a20;
+  --color-violet-300: #57409f;
+  --color-violet-500: #5140a6;
+
+  /* 浅底上的「字」必须压深（对齐既有 --color-emerald-300:#146b52 那一档）。
+     灯色 --sw-* 保持鲜亮不动：它们是填充，浅底上照样是「一块亮色」。 */
+  --sem-ok-text: #0f6b46;
+  --sem-danger-text: #b0201a;
+  --sem-busy-text: #7a5200;
+
+  /* 浅底符号档：比字色鲜、比深底档深，图形 3:1 独立达标（不由深色推断）。 */
+  --sem-icon-ok: #16a34a;
+  --sem-icon-prefill: #0e7490;
+
+  /* 选中态浅底档：纸底上要一眼看出选中哪条，描边压深保住图形 3:1。 */
+  --sel-bg: #e2d3ae;
+  --sel-ring: #8a7433;
+
+  --focus: #0a515c;
+
+  /* 浅底上的空闲点同样走 slate-500（5.74:1，图形门槛 3:1 富余） */
+  --dot-idle: var(--color-slate-500);
+
+  /* 浅纸地上 #22d3ee 只有 2.2:1（柱和线几乎看不见），整套换深档。
+     用户 2026-11-16 拍板换鲜艳档：600 系饱和色，图形对比仍 ≥3:1。 */
+  --chart-1: #0891b2;
+  --chart-2: #7c3aed;
+  --chart-3: #059669;
+  --chart-4: #c2600a;
+  --chart-5: #db2777;
+  --chart-6: #475569;
+  /* 浅纸同理：#cdbc92 落在纸底只有 1.74:1。轴线走次要文字档（5.74:1），网格留强边框档当装饰。 */
+  --chart-axis: var(--color-slate-500);
+  --chart-grid: var(--color-slate-700);
+
+  /* 浮窗玻璃壳的浅色版：暖白纸玻璃 + 深墨描边，投影压浅——
+     浅底上重黑投影会脏，像贴了块灰膏药。 */
+  --float-bg: rgba(251, 246, 233, 0.94);
+  --float-border: rgba(42, 35, 20, 0.35);
+  --float-shadow: 0 8px 22px rgba(80, 60, 20, 0.18);
+  --float-orb-bg: rgba(251, 246, 233, 0.86);
+  --float-orb-border: rgba(42, 35, 20, 0.8);
+  --float-orb-ink: #2a2314;
+}
+
+/* 文字层级工具类（UI-AUDIT P1-2）：正文色的唯一合法来源。
+   @theme 生成 text-ink-1..4，值走 var 间接引用，跟着 data-theme 一起翻转，
+   页面里不用写 text-[var(--text-4)] 这种长串，也没人再回去手挑 text-slate-*。
+   四级在两套主题下都 ≥4.5:1，由 scripts/check-contrast.mjs 把关。 */
+@theme {
+  /* ── 字号阶梯（ui_01 原型回灌 U1）─────────────────────────────────────
+     档位与角色一次定死，禁止再写 text-[Npx]（ui-budget.mjs 拦）。
+     值与 docs/ui_01/assets/tokens.css 同源，但**故意不整体下移一档**：
+     原型的 14px 正文正好落在现有 text-sm 上，于是 2xs / xs / sm 三档的值
+     一个都不动——那 287 处 text-xs 正文与浮窗那些文件零改动也不会变形。
+     只把 text-base 及以上重定档，让标题落进原型的 15 / 17 / 22 / 28。
+
+       11  徽章 / 芯片 / 矩阵格    text-2xs   （值未变）
+       12  说明 / 表格次要列        text-xs    （值未变，U1b 按角色分流）
+       14  正文 / 控件 / 按钮      text-sm    （值未变）
+       15  卡片与对话框标题        text-base  （原 16）
+       17  页面标题                text-lg    （原 18）
+       22  KPI 主值                text-xl    （原 20）
+       28  首屏大数字              text-2xl   （原 24）
+
+     原型还有一档 13px「次要正文」，**本轮不建**：它要等 U1b 把 287 处 text-xs
+     按角色重定级时，才知道到底有多少站点真要它，先建就是个没人吃的死令牌。 */
+  --text-2xs: 0.6875rem; /* 11 */
+  --text-2xs--line-height: 1.4;
+  --text-xs: 0.75rem; /* 12 */
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem; /* 14 */
+  --text-sm--line-height: 1.6;
+  --text-base: 0.9375rem; /* 15 */
+  --text-base--line-height: 1.5;
+  --text-lg: 1.0625rem; /* 17 */
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.375rem; /* 22 */
+  --text-xl--line-height: 1.25;
+  --text-2xl: 1.75rem; /* 28 */
+  --text-2xl--line-height: 1.2;
+  /* 阶梯保持单调；当前无站点使用，留着是为了 text-2xl 之上不会再有人手捏任意值。 */
+  --text-3xl: 2.125rem; /* 34 */
+  --text-3xl--line-height: 1.15;
+
+  /* 内容列宽工具类：max-w-content。设计口径是「单列 ≤780px」（UI-ALIGNMENT 决策 A），
+     此前散成 max-w-[780px] 和 max-w-3xl(768px) 两种，同一个 app 里正文宽度不一致。
+     原型 tokens.css 给的是 920px，**用户 2026-11-18 拍板保留 780**（法条明写定案，
+     920 对本仓单列正文页收益不明）。 */
+  --container-content: var(--content-w);
+
+  --color-ink-1: var(--text-1); /* 标题 / 关键值 */
+  --color-ink-2: var(--text-2); /* 正文 */
+  --color-ink-3: var(--text-3); /* 次要说明 */
+  --color-ink-4: var(--text-4); /* 弱注释（≥12px，禁止用在 11px 以下） */
+}
+
+body {
+  font-family: "SF Pro SC", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  @apply bg-slate-950 text-slate-200 antialiased;
+}
+
+/* 外壳高度用百分比链，配合 App 根的 h-full，取代 h-screen(100vh)：
+   缩放是挂在 documentElement 上的 CSS zoom，100vh 会被倍率乘高，导致文档层
+   多出滚动、顶部固定栏跟着一起滚。百分比高度按 zoom 后的视口折算，永远刚好
+   占满；文档层再禁滚，滚动只发生在内部内容区（overflow-auto，超出才出条）。 */
+html,
+body,
+#root {
+  height: 100%;
+  /* 四角圆角必须画在最外层：无边框透明窗口的裁剪落在 webview 图层上，
+     只给 .float-card 圆角会被图层裁掉右侧两角（左圆右方）。
+     这里和 .float-card 的 rounded-xl 同值，让卡片与图层裁剪对齐成四角圆。 */
+  border-radius: 0.75rem;
+}
+html {
+  overflow: hidden;
+  /* 窗口缩放（Cmd+滚轮 / Cmd+加减号）的唯一落点：JS 只写 --app-zoom，
+     倍率本身由这里生效。放在 html 而不是某个容器上，是因为 vh、百分比高度、
+     浮窗量回来的 getBoundingClientRect 都以 documentElement 的 zoom 为准，
+     挪走会连带改掉这三处的语义（浮窗尺寸有 Rust 侧联动，动不起）。
+     代价是 fixed 浮层的坐标得除以倍率，那笔账收在 lib/zoom.ts 的 viewportToLocal()。 */
+  zoom: var(--app-zoom);
+}
+
+/* 状态色语义（UI 重构定稿，全站一次定死，新代码一律用这些别名）：
+   --sem-ok / --sem-danger / --sem-busy  灯与填充（点、条、进度）
+   --sem-*-text                          文字与描边，两套主题各自达标 4.5:1
+   规则：字用 -text 变体，灯用裸名。混用会让浅色主题的状态语义整体失效。 */
+:root {
+  --sem-ok: var(--sw-on);
+  --sem-danger: var(--sw-off);
+  --sem-busy: var(--sw-live);
+
+  /* 实物图热点高亮环（遥控器映射页）：照片在两套主题下都是深色介质，环色固定亮青、
+     不随文字 cyan 档走——浅色主题 cyan-400 是深墨绿（为暖白底文字达标而重映射），
+     压在黑色键帽上直接看不见（用户 2026-11-19 截图拍板）。 */
+  --key-hl: #22d3ee;
+
+  /* 文字层级（UI-AUDIT P1-2）：正文色的唯一合法来源，四级都 ≥4.5:1。
+     旧写法 text-slate-600 在两套主题下只有 2.3/2.7:1，禁止再用于文字。 */
+  --text-1: var(--color-slate-100); /* 标题 / 关键值 */
+  --text-2: var(--color-slate-200); /* 正文 */
+  --text-3: var(--color-slate-400); /* 次要说明 */
+  --text-4: var(--color-slate-500); /* 弱注释（≥12px，禁止 11px 以下） */
+
+  /* 版式尺寸（计划 §6.5）：反复出现的裸像素值收成 token，改一处全站跟着改。
+     这些与主题无关，所以放在 :root 而不是 data-theme 块里。 */
+  --content-w: 780px;   /* 正文单列最大宽（设计口径 ≤780px） */
+  --rail-w: 56px;       /* 边条纯图标轨（用户 2026-11-20 拍板删文字列，页名/快捷键走悬停 tooltip） */
+  --t-slow: 280ms;      /* 宽度过渡这类「看得见形状变化」的动效时长 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --indent-row: 45px;   /* 展开区左缩进：与 chevron + 间距对齐，行内错误行同值 */
+  --dialog-max-h: 86%;  /* 弹窗最大高。**必须是百分比不能是 vh**：
+                           zoom 挂在 documentElement 上，vh 会被倍率乘高，
+                           弹窗会顶出屏幕（ModelParamsDialog 里踩过）。 */
+
+  /* 压暗档位（UI-AUDIT-2 A-1）：以前各处随手写 opacity-45/50/60 把整行文字压暗，
+     45% 的正文在两套主题上分别只剩 2.4 / 3.1:1——「后端宕机」这一眼看得见的状态
+     恰好把该行最需要读的读数糊掉了。0.72 是两套主题下 --text-1/--text-2 仍 ≥4.5:1
+     的下限（由 scripts/check-contrast.mjs 锁死），只许用于正文/关键值为主的行；
+     次要说明（ink-3/ink-4）本身余量小，不许再叠这一层。 */
+  --dim-idle: 0.72;
+
+  /* 浮窗空闲态透明度（UI-AUDIT-2 D-1）：三个浮窗以前各写各的（面板 60%、速率线 70%、
+     资源窗 100% 且无过渡），同一台 app 三种「闲下来」的手感。收成一个值，
+     并且比原先更实一点——浮窗闲着是为了瞄一眼，压太狠就得凑近看。 */
+  --float-idle: 0.8;
+
+  /* 窗口缩放倍率（lib/zoom.ts 写入，没设 = 1）。每个窗口各自一份，
+     浮窗和主窗互不同步；读它的人只有 zoomFactor() 一个。 */
+  --app-zoom: 1;
+
+  /* 连续重排下限（ui_01 回灌 U9）：栅格列数 = 容器还剩多宽 ÷ 这个下限，不再看视口
+     断点。每个值都是「这一列在这个宽度下还读得动」的实测下限——主窗 minWidth=900、
+     边条展开 208，内容区最窄约 652px，全部按它校过。
+     页面里不许再写 grid-cols-[repeat(auto-fit,...)] 这种字面量（AGENTS 铁律 3）。 */
+  --flow-tile: 160px; /* 指标瓦片：一行放得下「18.4 GB / 32.0 GB」（等宽 14 号实测 134 + 内边距） */
+  --flow-kpi: 190px; /* KPI 卡：text-xl 等宽值「1234 / 5678」实测 145 + 卡内边距 */
+  --flow-field: 300px; /* 表单字段：标签 + 控件不折行 */
+  /* 参数覆盖行：176px 键名列 + 值 + 徽标。U1b 把行内说明/徽标升到 14 号后按同法实测抬到 380，
+     再窄下去值列就要吃掉键名列的 truncate 余量。 */
+  --flow-param: 380px;
+  --flow-card: 330px; /* 并列卡片（「系统与引擎」的本机 / 102 两组） */
+
+  /* 内容区内边距：宽窗多留白、窄窗少留白（原型第 8 条 clamp 的那一半）。
+     原型用 2.2vw，本仓不能照抄——zoom 挂在 documentElement 上，vw 会被倍率乘高
+     （同 --dialog-max-h 不许用 vh 的理由）；这里改成按容器宽算的百分比，缩放时跟着
+     布局一起走。下限 1.25rem 就是原先的 p-5，窄窗观感一个像素都不变。 */
+  --content-pad: clamp(1.25rem, 3%, 1.75rem);
+  /* 页顶留白减半（用户 2026-11-21 拍板）：顶栏下空隙太大，各页 pt 统一用这个；左右留白不变。 */
+  --content-pad-top: calc(var(--content-pad) / 2);
+}
+
+/* 三槽冲突红闪（S-D）：闪 3 次 ≈900ms 后自然停。用背景色闪而不是压暗文字，
+   不违反「禁止 opacity 压暗文字」法条；边框/文字色由 .slot-conflict 挂语义色。
+   放 :root 外：@keyframes 嵌在选择器块里靠 CSS 嵌套，老 WKWebView 不认。 */
+@keyframes slot-conflict {
+  50% {
+    background: color-mix(in srgb, var(--sem-danger) 35%, transparent);
+  }
+}
+.slot-conflict {
+  animation: slot-conflict 0.3s ease-in-out 3;
+}
+
+/* 压暗工具类：唯一的「这一行此刻不重要」写法，值走 --dim-idle。
+   禁止再在页面里手写 opacity-4x/5x/6x 压暗文字（UI-AUDIT-2 A-1）。 */
+.dim-idle {
+  opacity: var(--dim-idle);
+}
+
+/* 内容区留白（外壳 App.tsx 的滚动区）：原先写死 p-5，宽窗下内容也跟着挤在左上角。 */
+.content-pad {
+  padding: var(--content-pad);
+}
+
+/* -- 连续重排栅格（ui_01 回灌 U9）--------------------------------------------------
+   列数由「容器还剩多宽 ÷ 下限」算出来：窗口从 minWidth 900 拉到全屏，列数一路连续
+   增减，不再在某个视口宽度上整排跳列。原先那套 sm:/md:/xl: 看的是**视口**宽度，边条
+   收起、页面分栏变窄、对话框按 95% 收窄它一概不知道——900 的窗口收起边条明明多出
+   152px，列数却一动不动。
+   下限一律套 min(100%, X)：容器比下限还窄时退成一列，不撑出横向滚动。
+   用法 class="tiles gap-2"（display:grid 由类自带，别再叠 Tailwind 的 grid）。 */
+.tiles,
+.kpi-grid,
+.form-grid,
+.param-grid,
+.cards-2 {
+  display: grid;
+}
+.tiles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--flow-tile)), 1fr));
+}
+.kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--flow-kpi)), 1fr));
+}
+.form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--flow-field)), 1fr));
+}
+.param-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--flow-param)), 1fr));
+}
+.cards-2 {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--flow-card)), 1fr));
+}
+
+/* 主栏 + 侧栏的两列：侧栏宽走 clamp 随容器连续变化并封顶，两列都不塌。
+   主栏恒 minmax(0,1fr)——窄到 minWidth 时是侧栏收到 clamp 下限让位，而不是主栏被压扁：
+   那半张图才是这页的主角。 */
+.split-chart {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 30%, 380px);
+}
+.split-nav {
+  display: grid;
+  grid-template-columns: clamp(180px, 24%, 240px) minmax(0, 1fr);
+}
+
+/* 边条（ui_01 回灌 U2）：固定宽一档（折叠已按用户 2026-11-20 拍板取消）。 */
+.rail {
+  width: var(--rail-w);
+}
+
+/* 快捷键键帽（边条入口右侧的 ⌘n）：全站以前没有 kbd，原型里它是独立一档。
+   原型用「下边框加粗到 2px」做键帽立体感，但 2px 直边配 4px 圆角在转角处接不上
+   （impeccable 的 border-accent-on-rounded 就是抓这个）；换成 1px 边框 + 1px 落影，
+   键帽的「侧壁」还在，转角不受罪。 */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid var(--color-slate-700);
+  border-radius: 4px;
+  background: var(--color-slate-900);
+  box-shadow: 0 1px 0 var(--color-slate-600);
+  color: var(--color-slate-400);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* 全局键盘焦点环（P0-2）：键盘可达即可见，鼠标点击不打扰。
+   以前全站只有 1 处 focus-visible，Tab 走完全程没有任何轨迹。 */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* 原生控件（勾选框、单选、滚动条箭头）跟着主题走，不然浅底上顶着个系统蓝。 */
+html[data-theme="dark"] { accent-color: #22d3ee; }
+html[data-theme="light"] { accent-color: #0e4f59; }
+
+/* thin scrollbars, cc-switch flavour */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded bg-slate-700/60;
+}
+
+/* ── 浮动面板（M12-C2a）────────────────────────────────────────────
+   窗口本身是透明的，卡片之外不能有背景，否则整块矩形会糊在屏幕上。 */
+html.float-view,
+html.float-view body,
+html.float-view #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+.float-card {
+  @apply rounded-xl px-3 py-2 font-sans;
+  /* 宽度写死在这里：窗口尺寸是量着内容收回来的，这里宽了窗口才跟着宽
+     （和 floatwin.rs 的 WIDTH 保持一致，两边不一致时以这里为准） */
+  width: 480px;
+  /* 玻璃壳颜色走主题变量：主窗切浅色，浮窗一起换成纸玻璃 */
+  background: var(--float-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  /* 边框：原 inset 发丝线（9% 白）融进桌面看不出是边框，改成明确的 1px 实边，
+     与圆钮态的 2px 白描边呼应；box-sizing 是 border-box（Tailwind preflight），
+     宽度仍由这里的 480px 定，边框不会把窗口顶宽。 */
+  border: 1px solid var(--float-border);
+  box-shadow: var(--float-shadow);
+  transition: opacity 0.25s ease;
+  cursor: grab;
+}
+.float-card:active {
+  cursor: grabbing;
+}
+
+/* 资源悬浮小窗：与 .float-card 同款玻璃壳（跟主题走），窄身。
+   宽度与 gui/sysfloat.rs 的 WIDTH 同值；窗口尺寸由前端量内容 fit 回来。 */
+.sysfloat-card {
+  @apply rounded-xl px-3 py-2 font-sans;
+  width: 264px;
+  background: var(--float-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--float-border);
+  box-shadow: var(--float-shadow);
+  transition: opacity 0.25s ease;
+  cursor: grab;
+}
+.sysfloat-card:active {
+  cursor: grabbing;
+}
+/* 提示词速取面板（计划 2026-11-18）：铺满整窗的浮窗卡片，材质与其余浮窗同源
+   （--float-bg 毛玻璃）。窗口宽高由用户拖右下角把手决定，卡片跟着窗口走。 */
+.prompt-card {
+  position: relative;
+  font-family: var(--font-sans, ui-sans-serif, system-ui);
+  background: var(--float-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--float-border);
+  border-radius: 14px;
+  box-shadow: var(--float-shadow);
+  cursor: grab;
+  overflow: hidden;
+}
+.prompt-card:active {
+  cursor: grabbing;
+}
+/* 浮窗空闲态（UI-AUDIT-2 D-1）：三个浮窗共用同一档压低与同一手感——闲下来退到
+   --float-idle，指针一碰回到全实。以前面板 60%、速率线 70%、资源窗根本不压，
+   同一台 app 三种「闲下来」。 */
+.float-idle {
+  opacity: var(--float-idle);
+}
+.float-idle:hover {
+  opacity: 1;
+}
+/* 单行速率线：贴终端下沿的细条。宽度随内容（不像 .float-card 定宽 480），
+   高度只有一行文字，描边比面板轻一档——它要贴着终端状态线，抢戏就错了。 */
+.float-line {
+  @apply rounded-md px-2 py-1 font-sans;
+  width: max-content;
+  background: var(--float-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--float-border);
+  box-shadow: var(--float-shadow);
+  transition: opacity 0.25s ease;
+  cursor: grab;
+}
+.float-line:active {
+  cursor: grabbing;
+}
+
+/* 贴边圆钮态：体积小、底色暗，描边必须加重才不至于融进桌面（tokbar 同款教训）。 */
+.float-orb {
+  @apply flex items-center justify-center;
+  width: 54px;
+  height: 54px;
+  border-radius: 9999px;
+  color: var(--float-orb-ink);
+  background: var(--float-orb-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 2px solid var(--float-orb-border);
+  box-shadow: var(--float-shadow);
+  cursor: grab;
+}
+.float-orb:active {
+  cursor: grabbing;
+}
+
+/* 活体圆点：只有「正在做事」才呼吸。闲着的灯不该闪——一直闪的灯等于没有灯。 */
+.live-breathe {
+  animation: live-breathe 1.15s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes live-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+/* 动态品牌标（用户 2026-11-20 拍板）：粗虚线圆慢转 + 彩色 llm 呼吸；
+   减少动态效果由下面的全局块统一停掉。 */
+.brand-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: brand-spin 14s linear infinite;
+}
+.brand-llm {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: brand-breathe 2.6s ease-in-out infinite;
+}
+@keyframes brand-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 呼吸走缩放不走透明度：压暗会洗掉颜色（用户 2026-11-20 嫌不够艳丽）。 */
+@keyframes brand-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+/* 顶栏版本号 ↔「有更新」呼吸交替（用户 2026-11-20 拍板）：两态叠放互淡；
+   减少动态效果时组件端直接静态显示「有更新」（TopVersionChip 里判 prefersReducedMotion）。 */
+.ver-alt {
+  position: relative;
+  display: inline-block;
+}
+.ver-alt > .ver-alt-b {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ver-alt > .ver-alt-a {
+    animation: ver-alt-a 2.6s ease-in-out infinite;
+  }
+  .ver-alt > .ver-alt-b {
+    animation: ver-alt-b 2.6s ease-in-out infinite;
+  }
+}
+@keyframes ver-alt-a {
+  0%,
+  38% {
+    opacity: 1;
+  }
+  50%,
+  88% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes ver-alt-b {
+  0%,
+  38% {
+    opacity: 0;
+  }
+  50%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* 减少动态效果：不止呼吸灯。animate-spin（刷新）、animate-pulse（保存中）
+   和满站的 transition-* 一起关掉，只留位移与颜色变化本身。 */
+@media (prefers-reduced-motion: reduce) {
+  .live-breathe {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── 顶栏 tooltip（十处）──────────────────────────────────────────────────
+   WKWebView 不渲染原生 `title` 悬浮提示（用户实测顶栏十处一个都不出），所以自己
+   画一层：`.tip` + `data-tip`。文案跟随当前界面语言（用户 2026-11-18 澄清：切哪种
+   语言就显示哪种，不是中英同显）。纯 CSS、不吃布局、hover 与键盘聚焦都出。 */
+.tip {
+  position: relative;
+}
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  white-space: pre-line;
+  text-align: center;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.28);
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.tip:hover::after,
+.tip:focus-visible::after {
+  opacity: 1;
+}
+/* 顶栏右端那排按钮：tooltip 居中会探出窗口右缘被裁，靠右对齐收进来。 */
+.tip-edge::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+/* 实物图语音键气泡（用户 2026-11-20 拍板）：出现在键位**上方**、消息聊天样式——
+   热点圆只有 ~80px 宽，默认气泡 shrink-to-fit 被挤成一字一行竖条；这里显式给宽、
+   翻到上方，::before 画指向键位的小尾巴（聊天气泡的尖角）。 */
+.tip-up::after {
+  top: auto;
+  bottom: calc(100% + 10px);
+  width: max-content;
+  max-width: 240px;
+}
+.tip-up::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: Canvas;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.tip-up:hover::before,
+.tip-up:focus-visible::before {
+  opacity: 1;
+}
