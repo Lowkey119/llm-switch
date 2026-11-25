@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>llm-switch 浮窗</title>
+    <!-- 浮窗配色跟主窗主题走（用户拍板）：首帧先按 localStorage 上色，免得闪一下
+         深色（与 index.html / src/lib/theme.ts 同一套判定）；运行中靠 theme.ts 的
+         storage 监听实时跟随主窗切换。单独一个入口页是因为 Tauri 的资源解析不吃
+         `index.html?view=float` 这种带查询串的 URL（试过：窗口建出来了但页面是空的）。 -->
+    <script>
+      (function () {
+        var s = null;
+        try {
+          var q = new URLSearchParams(location.search).get("theme");
+          if (q === "dark" || q === "light") s = q;
+          else s = localStorage.getItem("llm-switch.theme");
+        } catch (e) {}
+        var t =
+          s === "dark" || s === "light"
+            ? s
+            : window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+        document.documentElement.dataset.theme = t;
+        document.documentElement.style.colorScheme = t;
+      })();
+    </script>
+  </head>
+  <body class="float-view">
+    <div id="root"></div>
+    <script type="module" src="/src/float-main.tsx"></script>
+  </body>
+</html>
