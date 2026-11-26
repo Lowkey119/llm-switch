@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "llm-switch-rate",
+  "version": "1.0.0",
+  "description": "报告 llm-switch 网关算好的 token 速率（decode / prefill tok/s 与上下文占用），数值与 llm-switch 浮窗同源。",
+  "author": { "name": "llm-switch" },
+  "license": "MIT",
+  "keywords": ["rate", "tokens", "observability"]
+}

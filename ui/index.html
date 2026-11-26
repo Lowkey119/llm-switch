@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>llm-switch</title>
+    <!-- 首帧就上色，免得浅色主题闪一下黑底（和 src/lib/theme.ts 同一套判定） -->
+    <script>
+      (function () {
+        var s = null;
+        try {
+          var q = new URLSearchParams(location.search).get("theme");
+          if (q === "dark" || q === "light") s = q;
+          else s = localStorage.getItem("llm-switch.theme");
+        } catch (e) {}
+        var t =
+          s === "dark" || s === "light"
+            ? s
+            : window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+        document.documentElement.dataset.theme = t;
+        document.documentElement.style.colorScheme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
