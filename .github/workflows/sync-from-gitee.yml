@@ -1,0 +1,134 @@
+# 从 Gitee 反向同步 → 触发编译 → 回写 Gitee Release
+#
+# 为什么要它：本机到 GitHub 的上行链路会抽风（实测 curl 55 Broken pipe、443 连不上），
+# 而到 Gitee 一直稳。发版脚本推 GitHub 失败时，代码其实已经躺在 Gitee 公仓里，
+# 于是 GitHub 落后、Release 出不来。第三方镜像站只能下载不能代推（推需要写权限，
+# GitHub 没有推中继），所以唯一可靠的绕法就是让 GitHub **自己伸手去 Gitee 拿**：
+# 这条链路只要求 GitHub 的 API 能被 Actions 调用（Actions 跑在 GitHub 机器上，天然满足），
+# 完全不依赖本机上行。
+#
+# 流程：读两边版本号 → Gitee 更新才动 → 拉 Gitee 的 main 与 tag 推给 GitHub
+#       → 用 workflow_dispatch 触发 release.yml 编那个 tag → release.yml 自带的
+#          sync-gitee job 把包与 SHA256 回写成 Gitee Release。
+#
+# 不会死循环：sync-gitee 只写 Gitee 的 **Release**，不碰 Gitee 的代码仓，
+# 所以本 workflow 下一轮看到的 Gitee main 没变，直接跳过。
+name: sync-from-gitee
+
+on:
+  schedule:
+    # 每 20 分钟一轮。GitHub 的 cron 有几分钟抖动，发版场景够用；
+    # 急着同步就手动跑一次 workflow_dispatch。
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "只同步并编译指定 tag（留空＝自动比较版本）"
+        required: false
+        default: ""
+      force:
+        description: "yes = 忽略版本比较强制同步当前 Gitee main"
+        required: false
+        default: ""
+
+# 一轮没跑完不许起第二轮，避免两个 runner 同时 force-push main 互相打脸。
+concurrency:
+  group: sync-from-gitee
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # 用 ubuntu：这里只是搬代码和调 API，不编译，没必要排 macOS 的队。
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # gh workflow run 触发 release.yml 需要 actions: write（改用 GITHUB_TOKEN 后一并给出）
+      actions: write
+    steps:
+      - name: 检出 GitHub 侧
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # 版本比较是本 workflow 的命门：Gitee 不总是更新的那个
+      # （release-sync 三仓直推，先 Gitee 后 GitHub，任一边失败另一边反而领先）。
+      # 无脑以 Gitee 为准会把 GitHub 倒推回旧版，所以只认「Gitee 版本严格更大」；
+      # Gitee 落后（GitHub 推成了而 Gitee 没成）时这里不动，靠 release-sync --public-only 补。
+      - name: 比较两边版本
+        id: cmp
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE: ${{ github.event.inputs.force }}
+          WANT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          ghv=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' src-tauri/tauri.conf.json | head -1)
+          gvv=$(curl -fsS "https://gitee.com/api/v5/repos/lowkey110/llm-switch/contents/src-tauri/tauri.conf.json?ref=main" \
+            | python3 -c "import base64,json,sys;print(json.load(sys.stdin)['content'])" \
+            | base64 -d \
+            | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' | head -1)
+          echo "GitHub=$ghv  Gitee=$gvv"
+          [ -n "$gvv" ] || { echo "::error::读不到 Gitee 侧版本号"; exit 1; }
+          newest=$(printf '%s\n%s\n' "$ghv" "$gvv" | sort -V | tail -1)
+          if [ -n "${WANT_TAG}" ]; then
+            echo "sync=1" >> "$GITHUB_OUTPUT"
+            echo "tag=${WANT_TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "手动指定 tag ${WANT_TAG}，跳过版本比较"
+            exit 0
+          fi
+          if [ "${FORCE}" = "yes" ]; then
+            echo "sync=1" >> "$GITHUB_OUTPUT"; echo "tag=$gvv" >> "$GITHUB_OUTPUT"
+            echo "force=yes，强制同步 Gitee main（$gvv）"
+            exit 0
+          fi
+          if [ "$newest" = "$gvv" ] && [ "$gvv" != "$ghv" ]; then
+            echo "sync=1" >> "$GITHUB_OUTPUT"
+            echo "tag=$gvv" >> "$GITHUB_OUTPUT"
+            echo "Gitee 更新（$gvv > $ghv），开始同步"
+          else
+            echo "sync=0" >> "$GITHUB_OUTPUT"
+            echo "两边一致或 GitHub 更新（GitHub=$ghv Gitee=$gvv），本轮不动"
+          fi
+
+      - name: 拉 Gitee 的 main 与 tag 推给 GitHub
+        if: steps.cmp.outputs.sync == '1'
+        env:
+          # 用 GITHUB_TOKEN 而不是 PAT：它推送的 ref 不会触发 workflow（GitHub 防自触发设计），
+          # 这正是我们要的——唯一编译入口是下面那步 dispatch。此前用 PAT 推 tag 会
+          # 「push 事件 + dispatch」把同一版本串行编两遍（concurrency 同组兜着，白烧 10~30 分钟）。
+          # GITEE_SYNC_PUSH_TOKEN 因此不再被本 workflow 引用，secret 可以后续清理。
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VER: ${{ steps.cmp.outputs.tag }}
+        run: |
+          set -euo pipefail
+          [ -n "$TOKEN" ] || { echo "::error::缺 GITHUB_TOKEN（workflow 自带，不该为空）"; exit 1; }
+          GIT="git -c http.postBuffer=524288000 -c http.version=HTTP/1.1"
+          GH="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          # 从 Gitee 公仓取 main 与全部 tag（匿名可读，公仓不需要凭证）。
+          $GIT fetch --force https://gitee.com/lowkey110/llm-switch.git "+refs/heads/main:refs/remotes/gitee/main"
+          $GIT fetch --force https://gitee.com/lowkey110/llm-switch.git "+refs/tags/*:refs/tags/gitee-sync/*"
+          $GIT push --force "$GH" refs/remotes/gitee/main:refs/heads/main
+          # tag 去掉 gitee-sync/ 前缀再推，避免与本地既有 tag 撞名。
+          for ref in $(git for-each-ref --format='%(refname)' refs/tags/gitee-sync/); do
+            t="${ref#refs/tags/gitee-sync/}"
+            $GIT push --force "$GH" "refs/tags/gitee-sync/$t":refs/tags/"$t" || echo "  tag $t 推送失败（不阻塞，下轮再试）"
+          done
+          # 回读核对：推没推成不认 git 退出码，只认 ls-remote。
+          want=$(git rev-parse refs/remotes/gitee/main)
+          got=$(git ls-remote "$GH" refs/heads/main | cut -f1)
+          [ "$want" = "$got" ] || { echo "::error::回读 GitHub main 对不上（want=$want got=$got）"; exit 1; }
+          echo "GitHub main 已对齐 Gitee（$got），版本 v$VER"
+
+      - name: 触发编译并回写 Gitee Release
+        if: steps.cmp.outputs.sync == '1'
+        env:
+          # GITHUB_TOKEN + actions: write 足够触发 workflow_dispatch（见该 job 的 permissions）
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VER: ${{ steps.cmp.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # 走 workflow_dispatch 而不是等 tag push：CI 里用 GITHUB_TOKEN 推的 ref
+          # 不会再触发 workflow，dispatch 是确定能起来的；且 dispatch 用的是 main 上
+          # 最新的 release.yml（修好的那版），旧 tag 里那份坏的不影响。
+          gh workflow run release.yml --repo "${{ github.repository }}" -f "tag=v$VER"
+          echo "已触发 release.yml 编译 v$VER；出包后其 sync-gitee job 会把直链与 SHA256 回写成 Gitee Release"

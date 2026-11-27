@@ -1,0 +1,230 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要发布的标签（如 v0.2.37）
+        required: true
+        default: v0.2.37
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+# 并发组带上 tag：手动 workflow_dispatch 补跑多个旧版本时，
+# 全部落在 release-refs/heads/main 一个组里会串成一条长队（一次只能跑一个）。
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS (Apple Silicon)
+          # Intel 包不再用 macos-13：GitHub 已下线 macOS Intel 托管 runner，
+          # 那个 job 会永远排队并把整个 run 拖成「排队中」（2026-11-16 实测：
+          # Windows/Linux 都构建成功，macOS (Intel) 从 19:11 排队到第二天早上）。
+          # 改在 ARM runner 上交叉编译 x86_64，产物命名不变（_x64.dmg）。
+          - os: macos-latest
+            label: macOS (Intel)
+            rust_target: x86_64-apple-darwin
+          - os: windows-latest
+            label: Windows
+          - os: ubuntu-22.04
+            label: Linux
+
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      # 手动补跑旧版本时（workflow_dispatch 传 tag），workflow 文件取自主分支、
+      # 但代码必须取那个 tag——不写 ref 的话 checkout 默认拿 dispatch 的分支，
+      # 结果所有旧 tag 都编成 main 的代码，版本号还是旧的，等于白跑。
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Linux 依赖
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev \
+            libayatana-appindicator3-dev libxdo-dev patchelf libssl-dev build-essential
+
+      - name: 前端
+        run: |
+          npm --prefix ui ci --no-audit --no-fund
+          npm --prefix ui run build
+
+      # 交叉编译才需要：ARM mac 上出 Intel 包（见上面矩阵注释）。
+      - name: 加 Rust 目标
+        if: matrix.rust_target
+        run: rustup target add ${{ matrix.rust_target }}
+
+      # 从 src-tauri 里跑，绕开仓库内其它 package.json 干扰 CLI 的项目探测
+      - name: 构建安装包
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          # --features gui 必须带：Cargo.toml 里 default = []，gui 默认关着
+          # （为的是无头部署与 cargo test 不付 WebKit 编译代价）。不带它打出来的是
+          # 无头二进制，不是桌面壳——浮窗、托盘、单实例全没有，包是废的。
+          # 与本地口径一致：本地出包也是 tauri build --features gui。
+          if [ -n "${{ matrix.rust_target }}" ]; then
+            ../ui/node_modules/.bin/tauri build --features gui --target ${{ matrix.rust_target }} \
+              -c '{"bundle":{"targets":"all"}}'
+          else
+            ../ui/node_modules/.bin/tauri build --features gui \
+              -c '{"bundle":{"targets":"all"}}'
+          fi
+
+      - name: 收集产物
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          # 找两处：仓库根 target（本仓是 workspace，members=["src-tauri"]，
+          # bundle 实际落在这里）与 src-tauri/target（单独构建时的老路径）。
+          # 0.2.48~0.2.52 的 Release 只有源码包，就是因为这里只找了 src-tauri/target，
+          # 结果 artifacts 空 + fail_on_unmatched_files:false 静默发了空 Release。
+          for d in target src-tauri/target; do
+            [ -d "$d" ] || continue
+            # 只认 bundle 目录里的东西：不加这个限制时 `find target -name '*.exe'`
+            # 会把 target/ 里 cargo 编出来的测试与示例可执行文件一并收走，
+            # 0.2.48 补跑时一次挂了 69 个「资产」，绝大多数是垃圾。
+            # 单条 find 用 -path '*/bundle/*' 限定（GNU/BSD find 都认）。
+            # 别改回 `find bundle 目录 | xargs find`：xargs 把路径追加在 -exec … \;
+            # 之后，find 当谓词解析报错且被 2>/dev/null 吞掉，一个文件都拷不出来
+            # （0.2.60 首跑四平台全红在这），且 -r 是 GNU xargs 专属、macOS 直接 illegal option。
+            find "$d" -type f -path '*/bundle/*' \
+              \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \
+                 -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) \
+              -exec cp -f {} artifacts/ \; 2>/dev/null || true
+          done
+          ls -lh artifacts
+          # 空产物必须红着停，不许再静默发一个只有源码的 Release。
+          if [ -z "$(ls -A artifacts 2>/dev/null)" ]; then
+            echo "::error::没找到任何安装包产物（检查 bundle 路径），拒绝发布空 Release"
+            exit 1
+          fi
+
+      - name: 校验和
+        shell: bash
+        run: |
+          cd artifacts
+          [ -z "$(ls -A .)" ] && exit 0
+          # 文件名必须去空格与括号：matrix.label 是「macOS (Apple Silicon)」这种人类可读名，
+          # 直接拼进重定向目标，bash 会把 (Apple Silicon) 当子 shell 语法直接报错
+          # ——0.2.57 的 macOS 两个 job 就是这么挂在「校验和」这步的。
+          slug=$(printf '%s' "${{ matrix.label }}" | tr -cd 'A-Za-z0-9._-')
+          out="SHA256SUMS-${slug}.txt"
+          # 三平台各有各自的工具：Linux 有 sha256sum，macOS 有 shasum，Windows 只有 certutil。
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum -- * > "$out"
+          elif command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 -- * > "$out"
+          else
+            for f in *; do
+              h=$(certutil -hashfile "$f" SHA256 | sed -n 2p)
+              printf '%s  %s\n' "$h" "$f"
+            done > "$out"
+          fi
+          cat "$out"
+
+      # 发布说明取自 CHANGELOG.md 对应小节。此前 Release 正文只有版本号一行，
+      # 用户在下载页看不到这版改了什么 / 优化了什么 / 加了什么。
+      - name: 取本版发布说明
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          {
+            echo "### 本版本改动 · What's new"
+            echo
+            # 兜底：workflow 取自主分支，但代码 checkout 的是输入的那个旧 tag，
+            # 旧 tag 的树里可能还没有 scripts/release-notes.sh（补跑 0.2.48 那批就是这样）。
+            # 缺脚本只降级成「无更新日志」，不许把出包弄红。
+            if [ -f scripts/release-notes.sh ]; then
+              bash scripts/release-notes.sh "$TAG"
+            else
+              echo "（本版本未附更新日志条目）"
+            fi
+            echo
+            echo "下载后请先核对同目录下的 \`SHA256SUMS-artifacts-*.txt\`。"
+            echo
+            echo "更新日志全文见 CHANGELOG.md。"
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: 上传到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          body_path: release-notes.md
+          files: artifacts/*
+          # 必须 true：false 时 artifacts 空也照样建 Release，
+          # 用户看到的就是「只有 Source code 的假发布」（0.2.48/0.2.52 实报）。
+          fail_on_unmatched_files: true
+
+  # 法条 docs/多仓发版规范.md §五（2026-11-17 实测修订）：Gitee 附件上传接口是开放的
+  # （releases/{id}/attach_files，端点与实测记录见 scripts/gitee-release-sync.sh 头注释）。
+  # 本 job 把安装包上传为 Gitee Release 附件（正文下载链接即 gitee 直链，国人不经 GitHub），
+  # 正文写本版本改动 + 物料表 + SHA256；同步失败按脚本退出码分类自动重试直到成功
+  # （1=瞬态退避续传，2=永久错误立即红）。逻辑只在 scripts/gitee-release-sync.sh 一处
+  # （本地补跑与 CI 共用同一份，不写两遍）。
+  sync-gitee:
+    name: 同步 Gitee Release
+    needs: build
+    # 某个平台编不出来不能让 Gitee 颗粒无收：0.2.56 那轮 Windows/Linux 因代码 bug 失败，
+    # build 整体判失败，sync-gitee 被整批 skip，Gitee 上一个 Release 都没同步上。
+    # 这里读的是 GitHub Release 上**已存在**的资产，有几个算几个；
+    # 但整个 build 被 cancel 时不跑（那是人为中止，不该继续发布）。
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 同步安装包与更新日志到 Gitee Release（失败自动重试）
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::error::缺仓库 secret GITEE_TOKEN，Gitee Release 没同步（GitHub Release 不受影响）"
+            exit 2   # 永久错误：不给 token 重试多少次都一样
+          fi
+          # 用户口径：镜像失败要轮询多次直到成功。脚本幂等（附件按名字+大小只补缺失），
+          # 重复调用安全；退出码 2=永久错（端点/凭证/无产物）立即红，1=瞬态退避续传。
+          # 有界而不是字面无限：Actions 单 job 硬上限 6h，且一直转圈会把真故障藏起来
+          # （违反「错误不得长得像成功」）。12 轮退避约 80 分钟，仍失败可直接重跑本 job 续传。
+          delay=20; n=0
+          while :; do
+            n=$((n+1))
+            set +e
+            bash scripts/gitee-release-sync.sh "$TAG"
+            rc=$?
+            set -e
+            if [ "$rc" -eq 0 ]; then
+              echo "::notice::Gitee Release 同步成功（第 $n 次）"
+              break
+            fi
+            if [ "$rc" -eq 2 ]; then
+              echo "::error::永久性错误（rc=2：端点/凭证/产物问题），停止重试"
+              exit 2
+            fi
+            if [ "$n" -ge 12 ]; then
+              echo "::error::重试 $n 次（约 80 分钟）仍失败，最后 rc=$rc；重跑本 job 可从断点续传"
+              exit 1
+            fi
+            echo "第 $n 次同步失败（rc=$rc），${delay}s 后重试"
+            sleep "$delay"
+            delay=$((delay * 2))
+            [ "$delay" -gt 600 ] && delay=600
+          done

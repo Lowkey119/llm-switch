@@ -1,0 +1,152 @@
+[package]
+name = "llm-switch"
+version = "0.2.131"
+edition = "2021"
+description = "Local multi-backend LLM gateway with protocol translation, metrics, caching and skills management"
+license = "MIT"
+repository = "https://gitee.com/lowkey/llm-switch"
+
+[lib]
+name = "llm_switch"
+path = "src/lib.rs"
+
+[[bin]]
+name = "llm-switch"
+path = "src/main.rs"
+
+[features]
+default = []
+# Desktop shell (Tauri 2). Kept off-by-default so headless deployments and CI
+# never pay the WebKit build cost; `cargo build --features gui` enables it.
+gui = [
+  "dep:tauri",
+  "dep:tauri-plugin-single-instance",
+  "dep:tauri-plugin-window-state",
+  "dep:tauri-plugin-global-shortcut",
+  "dep:enigo",
+  "dep:objc2-app-kit",
+  "dep:btleplug",
+  "dep:hidapi",
+  "dep:objc2-io-kit",
+  "dep:core-graphics",
+  "dep:core-foundation",
+  "dep:cpal",
+  "dep:objc2",
+  "dep:objc2-foundation",
+  "dep:block2",
+  "dep:objc2-speech",
+  "dep:objc2-avf-audio",
+  "dep:tauri-build",
+]
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "fs", "time", "sync", "process"] }
+tower-http = { version = "0.5", features = ["cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+# 无损改写 Codex config.toml（保住用户注释）
+toml_edit = "0.22"
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2", "multipart"] }
+bytes = "1"
+futures = "0.3"
+sha2 = "0.10"
+# 下载进度要逐块读 reqwest 的 bytes_stream（reqwest 自身已带，这里只是显式取用 StreamExt）
+futures-util = "0.3"
+base64 = "0.22"
+zip = "2"
+tempfile = "3"
+http = "1"
+url = "2"
+async-stream = "0.3"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
+tauri = { version = "2", features = ["tray-icon"], optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
+tauri-plugin-window-state = { version = "2", optional = true }
+tauri-plugin-global-shortcut = { version = "2", optional = true }
+sysinfo = "0.40.1"
+enigo = { version = "0.6.1", optional = true }
+# mSBC 解码（小米 1 代语音塞在 HID 报告里，计划 §八 P7）：MIT、no_std 无分配。
+# 只引这一个 crate：用 inherent 的 decode_into 取帧，不再直接引 nanoaudio-core。
+nanoaudio-sbc = "0.1.1"
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+macmon = { version = "0.11.0", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", optional = true }
+# 小米遥控器 BLE Central（计划 2026-11-19 §7：BSD-3-Clause，Win/mac/Linux 三平台）。
+# 只进 macOS 段：CI 的 ubuntu 构建不背 CoreBluetooth 的编译链。
+btleplug = { version = "0.13.5", optional = true }
+# S4 按键通道（计划 §7）：hidapi 的 macOS 后端就是 IOHIDManager，set_open_exclusive
+# 即 SeizeDevice——本仓 unsafe_code=deny，io-kit-sys/objc2-io-kit 的报告回调注册
+# 是 unsafe 编不进来，hidapi 是独占优先/共享回退的唯一安全入口。MIT。
+hidapi = { version = "2.6", optional = true }
+# 输入监控 TCC 查询（IOHIDCheckAccess，安全封装；计划 §7 候选，Zlib/Apache/MIT）。
+objc2-io-kit = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "hidsystem",
+], optional = true }
+# CGEvent 注入 + 事件 tap 抑制（0.25 起 CGEventTap 是安全封装；计划 §7，MIT/Apache）。
+core-graphics = { version = "0.25", optional = true }
+# tap 挂主 runloop 用（CFRunLoop::add_source 公共模式；unsafe_code=deny 下的安全入路）。
+core-foundation = { version = "0.10", optional = true }
+# 语音路 2（虚拟声卡透传）：把遥控器麦克风灌进用户指定的输出设备。Apache-2.0。
+# 只进 macOS 段——Linux 走 PipeWire null-sink、Windows 走 WASAPI，随跨平台片再放。
+cpal = { version = "0.18", optional = true }
+# 语音路 1（系统转写）：Apple Speech 框架 + AVAudioEngine 输入 tap。objc2 系是
+# Speech/AVFAudio 的安全绑定（MIT/Zlib/Apache）。speech 自带依赖 avf-audio，
+# 版本必须同批（0.3.2），类型才严丝合缝。只进 macOS 段。
+objc2 = { version = "0.6", optional = true }
+# NSData/NSDictionary 随 C7 加：应用图标要 TIFF→PNG（NSData），PNG 编码要空属性字典（NSDictionary）。
+# NSNotification/NSOperation 随 C5 加：前台 App 监听走 NSWorkspace 通知中心的 block 观察者。
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSLocale", "NSString", "NSError", "NSData", "NSDictionary", "NSNotification", "NSOperation"], optional = true }
+block2 = { version = "0.6", optional = true }
+objc2-speech = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-avf-audio",
+  "SFErrors",
+  "SFSpeechRecognizer",
+  "SFSpeechRecognitionRequest",
+  "SFSpeechRecognitionResult",
+  "SFSpeechRecognitionTask",
+  "SFTranscription",
+], optional = true }
+objc2-avf-audio = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "block2",
+  "AVAudioApplication",
+  "AVAudioEngine",
+  "AVAudioNode",
+  "AVAudioIONode",
+  "AVAudioFormat",
+  "AVAudioBuffer",
+  "AVAudioTime",
+  "AVAudioTypes",
+], optional = true }
+
+[build-dependencies]
+# `features = []` 由 tauri CLI 自动写入（它会确保 tauri-build 不吃默认 features），别手删。
+tauri-build = { version = "2", optional = true, features = [] }
+
+[dev-dependencies]
+async-stream = "0.3"
+bytes = "1"
+tempfile = "3"
+tower = { version = "0.4", features = ["util"] }
+# mSBC 往返自测用（生产码只走 nanoaudio-sbc 的 inherent decode_into，不需要这个 trait）。
+nanoaudio-core = "0.1"
+[lints.rust]
+# 跨平台移植 S-X1：forbid 改 deny——Windows 低级键盘钩子与 X11 抓键盘没有安全封装 crate，
+# 那两个 FFI 文件（inject_win.rs / grab_x11.rs）在文件顶 `#![allow(unsafe_code)]` 并逐块
+# 带 SAFETY 注释；其余文件维持 deny 效果（deny 不被 allow 覆盖处照样红）。
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
