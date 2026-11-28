@@ -1,0 +1,21 @@
+NOTICE
+======
+
+llm-switch
+Copyright (c) 2026 Lowkey119
+Licensed under the MIT License (see LICENSE).
+
+Portions of this software are derived from cc-switch
+(https://github.com/farion1231/cc-switch):
+
+    MIT License
+    Copyright (c) 2025 Jason Young
+
+Those portions retain the terms of the upstream MIT License reproduced
+above. The `takeover/` module in `src-tauri/src/` follows cc-switch's
+projection design; see the per-file comments for the specific alignment.
+
+The remote photograph `ui/src/assets/remote-gen1.webp` is derived from
+`Resources/ARN9-remote-photo.png` in nijez/open-voice-bridge
+(https://github.com/nijez/open-voice-bridge, GPL-3.0-only). Only the
+photograph was reused; no upstream code was copied.

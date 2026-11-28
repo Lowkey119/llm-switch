@@ -1,0 +1,31 @@
+target/
+node_modules/
+dist/
+.refs/
+.DS_Store
+*.log
+src-tauri/gen/
+.omc/
+eval-results/
+docs/
+
+# 备份/私有库排除：可再生产物与涉密本地件
+dist-release/
+demo-video/clips/
+demo-video/prep/
+*.db
+*.db-wal
+*.db-shm
+*.bak
+# env 兜底：凭证文件只住 ~/.config/llm-switch/，仓库里出现即事故
+.env
+*.env
+
+# 演示视频制作工具与素材：不属于产品源码，单独保存在 ~/myllm/video-projects/llm-switch-demo-video
+demo-video/
+
+# TS 增量构建缓存（本机产物，不入库）
+ui/tsconfig.tsbuildinfo
+
+# impeccable 审查工具缓存
+.impeccable/
